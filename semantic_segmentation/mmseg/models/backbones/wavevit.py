@@ -13,6 +13,7 @@ import pywt
 from torch.autograd import Function
 from mmcv.cnn import build_norm_layer
 
+
 class DWT_Function(Function):
     @staticmethod
     def forward(ctx, x, w_ll, w_lh, w_hl, w_hh):
@@ -21,10 +22,10 @@ class DWT_Function(Function):
         ctx.shape = x.shape
 
         dim = x.shape[1]
-        x_ll = torch.nn.functional.conv2d(x, w_ll.expand(dim, -1, -1, -1), stride = 2, groups = dim)
-        x_lh = torch.nn.functional.conv2d(x, w_lh.expand(dim, -1, -1, -1), stride = 2, groups = dim)
-        x_hl = torch.nn.functional.conv2d(x, w_hl.expand(dim, -1, -1, -1), stride = 2, groups = dim)
-        x_hh = torch.nn.functional.conv2d(x, w_hh.expand(dim, -1, -1, -1), stride = 2, groups = dim)
+        x_ll = torch.nn.functional.conv2d(x, w_ll.expand(dim, -1, -1, -1), stride=2, groups=dim)
+        x_lh = torch.nn.functional.conv2d(x, w_lh.expand(dim, -1, -1, -1), stride=2, groups=dim)
+        x_hl = torch.nn.functional.conv2d(x, w_hl.expand(dim, -1, -1, -1), stride=2, groups=dim)
+        x_hh = torch.nn.functional.conv2d(x, w_hh.expand(dim, -1, -1, -1), stride=2, groups=dim)
         x = torch.cat([x_ll, x_lh, x_hl, x_hh], dim=1)
         return x
 
@@ -33,13 +34,14 @@ class DWT_Function(Function):
         if ctx.needs_input_grad[0]:
             w_ll, w_lh, w_hl, w_hh = ctx.saved_tensors
             B, C, H, W = ctx.shape
-            dx = dx.view(B, 4, -1, H//2, W//2)
+            dx = dx.view(B, 4, -1, H // 2, W // 2)
 
-            dx = dx.transpose(1,2).reshape(B, -1, H//2, W//2)
+            dx = dx.transpose(1, 2).reshape(B, -1, H // 2, W // 2)
             filters = torch.cat([w_ll, w_lh, w_hl, w_hh], dim=0).repeat(C, 1, 1, 1)
             dx = torch.nn.functional.conv_transpose2d(dx, filters, stride=2, groups=C)
 
         return dx, None, None, None, None
+
 
 class IDWT_Function(Function):
     @staticmethod
@@ -48,7 +50,7 @@ class IDWT_Function(Function):
         ctx.shape = x.shape
 
         B, _, H, W = x.shape
-        x = x.view(B, 4, -1, H, W).transpose(1, 2)
+        x = x.view(B, 4, -1, H, W).transpose(1, 2)  # [B, C for each frequency, 4, H, W]
         C = x.shape[1]
         x = x.reshape(B, -1, H, W)
         filters = filters.repeat(C, 1, 1, 1)
@@ -65,12 +67,13 @@ class IDWT_Function(Function):
             dx = dx.contiguous()
 
             w_ll, w_lh, w_hl, w_hh = torch.unbind(filters, dim=0)
-            x_ll = torch.nn.functional.conv2d(dx, w_ll.unsqueeze(1).expand(C, -1, -1, -1), stride = 2, groups = C)
-            x_lh = torch.nn.functional.conv2d(dx, w_lh.unsqueeze(1).expand(C, -1, -1, -1), stride = 2, groups = C)
-            x_hl = torch.nn.functional.conv2d(dx, w_hl.unsqueeze(1).expand(C, -1, -1, -1), stride = 2, groups = C)
-            x_hh = torch.nn.functional.conv2d(dx, w_hh.unsqueeze(1).expand(C, -1, -1, -1), stride = 2, groups = C)
+            x_ll = torch.nn.functional.conv2d(dx, w_ll.unsqueeze(1).expand(C, -1, -1, -1), stride=2, groups=C)
+            x_lh = torch.nn.functional.conv2d(dx, w_lh.unsqueeze(1).expand(C, -1, -1, -1), stride=2, groups=C)
+            x_hl = torch.nn.functional.conv2d(dx, w_hl.unsqueeze(1).expand(C, -1, -1, -1), stride=2, groups=C)
+            x_hh = torch.nn.functional.conv2d(dx, w_hh.unsqueeze(1).expand(C, -1, -1, -1), stride=2, groups=C)
             dx = torch.cat([x_ll, x_lh, x_hl, x_hh], dim=1)
         return dx, None
+
 
 class IDWT_2D(nn.Module):
     def __init__(self, wave):
@@ -78,11 +81,11 @@ class IDWT_2D(nn.Module):
         w = pywt.Wavelet(wave)
         rec_hi = torch.Tensor(w.rec_hi)
         rec_lo = torch.Tensor(w.rec_lo)
-        
-        w_ll = rec_lo.unsqueeze(0)*rec_lo.unsqueeze(1)
-        w_lh = rec_lo.unsqueeze(0)*rec_hi.unsqueeze(1)
-        w_hl = rec_hi.unsqueeze(0)*rec_lo.unsqueeze(1)
-        w_hh = rec_hi.unsqueeze(0)*rec_hi.unsqueeze(1)
+
+        w_ll = rec_lo.unsqueeze(0) * rec_lo.unsqueeze(1)
+        w_lh = rec_lo.unsqueeze(0) * rec_hi.unsqueeze(1)
+        w_hl = rec_hi.unsqueeze(0) * rec_lo.unsqueeze(1)
+        w_hh = rec_hi.unsqueeze(0) * rec_hi.unsqueeze(1)
 
         w_ll = w_ll.unsqueeze(0).unsqueeze(1)
         w_lh = w_lh.unsqueeze(0).unsqueeze(1)
@@ -90,35 +93,43 @@ class IDWT_2D(nn.Module):
         w_hh = w_hh.unsqueeze(0).unsqueeze(1)
         filters = torch.cat([w_ll, w_lh, w_hl, w_hh], dim=0)
         self.register_buffer('filters', filters)
-        self.filters = self.filters.to(dtype=torch.float16)
+        # self.filters = self.filters.to(dtype=torch.float16)
+        self.filters = self.filters.to(dtype=torch.float32)
 
     def forward(self, x):
         return IDWT_Function.apply(x, self.filters)
+
 
 class DWT_2D(nn.Module):
     def __init__(self, wave):
         super(DWT_2D, self).__init__()
         w = pywt.Wavelet(wave)
-        dec_hi = torch.Tensor(w.dec_hi[::-1]) 
+        dec_hi = torch.Tensor(w.dec_hi[::-1])
         dec_lo = torch.Tensor(w.dec_lo[::-1])
 
-        w_ll = dec_lo.unsqueeze(0)*dec_lo.unsqueeze(1)
-        w_lh = dec_lo.unsqueeze(0)*dec_hi.unsqueeze(1)
-        w_hl = dec_hi.unsqueeze(0)*dec_lo.unsqueeze(1)
-        w_hh = dec_hi.unsqueeze(0)*dec_hi.unsqueeze(1)
-
+        w_ll = dec_lo.unsqueeze(0) * dec_lo.unsqueeze(1)
+        w_lh = dec_lo.unsqueeze(0) * dec_hi.unsqueeze(1)
+        w_hl = dec_hi.unsqueeze(0) * dec_lo.unsqueeze(1)
+        w_hh = dec_hi.unsqueeze(0) * dec_hi.unsqueeze(1)
+        # using register_buffer, the wavelet filters will not be updated during training but saved in state_dict
         self.register_buffer('w_ll', w_ll.unsqueeze(0).unsqueeze(0))
         self.register_buffer('w_lh', w_lh.unsqueeze(0).unsqueeze(0))
         self.register_buffer('w_hl', w_hl.unsqueeze(0).unsqueeze(0))
         self.register_buffer('w_hh', w_hh.unsqueeze(0).unsqueeze(0))
 
-        self.w_ll = self.w_ll.to(dtype=torch.float16)
-        self.w_lh = self.w_lh.to(dtype=torch.float16)
-        self.w_hl = self.w_hl.to(dtype=torch.float16)
-        self.w_hh = self.w_hh.to(dtype=torch.float16)
+        # self.w_ll = self.w_ll.to(dtype=torch.float16)
+        # self.w_lh = self.w_lh.to(dtype=torch.float16)
+        # self.w_hl = self.w_hl.to(dtype=torch.float16)
+        # self.w_hh = self.w_hh.to(dtype=torch.float16)
+
+        self.w_ll = self.w_ll.to(dtype=torch.float32)
+        self.w_lh = self.w_lh.to(dtype=torch.float32)
+        self.w_hl = self.w_hl.to(dtype=torch.float32)
+        self.w_hh = self.w_hh.to(dtype=torch.float32)
 
     def forward(self, x):
         return DWT_Function.apply(x, self.w_ll, self.w_lh, self.w_hl, self.w_hh)
+
 
 class DWConv(nn.Module):
     def __init__(self, dim=768):
@@ -131,6 +142,7 @@ class DWConv(nn.Module):
         x = self.dwconv(x)
         x = x.flatten(2).transpose(1, 2)
         return x
+
 
 class PVT2FFN(nn.Module):
     def __init__(self, in_features, hidden_features):
@@ -163,6 +175,7 @@ class PVT2FFN(nn.Module):
         x = self.fc2(x)
         return x
 
+
 class WaveAttention(nn.Module):
     def __init__(self, dim, num_heads, sr_ratio):
         super().__init__()
@@ -175,8 +188,8 @@ class WaveAttention(nn.Module):
         self.idwt = IDWT_2D(wave='haar')
 
         self.reduce = nn.Sequential(
-            nn.Conv2d(dim, dim//4, kernel_size=1, padding=0, stride=1),
-            build_norm_layer(dict(type='BN', requires_grad=False), dim//4)[1],
+            nn.Conv2d(dim, dim // 4, kernel_size=1, padding=0, stride=1),
+            build_norm_layer(dict(type='BN', requires_grad=False), dim // 4)[1],
             nn.ReLU(inplace=True),
         )
 
@@ -192,7 +205,7 @@ class WaveAttention(nn.Module):
             nn.LayerNorm(dim),
             nn.Linear(dim, dim * 2)
         )
-        self.proj = nn.Linear(dim+dim//4, dim)
+        self.proj = nn.Linear(dim + dim // 4, dim)
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -212,17 +225,17 @@ class WaveAttention(nn.Module):
 
     def forward(self, x, H, W):
         B, N, C = x.shape
-        q = self.q(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
+        q = self.q(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)  # q [B, num_heads, N, head_dim]
 
-        x = x.view(B, H, W, C).permute(0, 3, 1, 2)
-        x_dwt = self.dwt(self.reduce(x))
+        x = x.view(B, H, W, C).permute(0, 3, 1, 2)  # x [B, C, H, W]
+        x_dwt = self.dwt(self.reduce(x))  # reduce channels to 1/4 before performing wavelet transform and return the feature map with half size
         x_dwt = self.filter(x_dwt)
 
         x_idwt = self.idwt(x_dwt)
-        x_idwt = x_idwt.view(B, -1, x_idwt.size(-2)*x_idwt.size(-1)).transpose(1, 2)
+        x_idwt = x_idwt.view(B, -1, x_idwt.size(-2) * x_idwt.size(-1)).transpose(1, 2)  # [B, H*W, C//4]
 
-        kv = self.kv_embed(x_dwt).reshape(B, C, -1).permute(0, 2, 1)
-        kv = self.kv(kv).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        kv = self.kv_embed(x_dwt).reshape(B, C, -1).permute(0, 2, 1)  # they downsample the feature map 4 times to get k and v, which is not matched to the paper
+        kv = self.kv(kv).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)  # [2, B, num_heads, N, head_dim]
         k, v = kv[0], kv[1]
 
         attn = (q @ k.transpose(-2, -1)) * self.scale
@@ -230,6 +243,7 @@ class WaveAttention(nn.Module):
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(torch.cat([x, x_idwt], dim=-1))
         return x
+
 
 class Attention(nn.Module):
     def __init__(self, dim, num_heads):
@@ -272,16 +286,17 @@ class Attention(nn.Module):
         x = self.proj(x)
         return x
 
+
 class Block(nn.Module):
-    def __init__(self, 
-        dim, 
-        num_heads, 
-        mlp_ratio,
-        drop_path=0., 
-        norm_layer=nn.LayerNorm, 
-        sr_ratio=1, 
-        block_type = 'wave'
-    ):
+    def __init__(self,
+                 dim,
+                 num_heads,
+                 mlp_ratio,
+                 drop_path=0.,
+                 norm_layer=nn.LayerNorm,
+                 sr_ratio=1,
+                 block_type='wave'
+                 ):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.norm2 = norm_layer(dim)
@@ -290,7 +305,7 @@ class Block(nn.Module):
             self.attn = Attention(dim, num_heads)
         else:
             self.attn = WaveAttention(dim, num_heads, sr_ratio)
-        self.mlp = PVT2FFN(in_features=dim, hidden_features=int(dim * mlp_ratio))
+        self.mlp = PVT2FFN(in_features=dim, hidden_features=int(dim * mlp_ratio))  # The MLP ratio controls the size of the MLP’s hidden layer relative to the input embedding dimension.
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.apply(self._init_weights)
 
@@ -313,6 +328,7 @@ class Block(nn.Module):
         x = x + self.drop_path(self.attn(self.norm1(x), H, W))
         x = x + self.drop_path(self.mlp(self.norm2(x), H, W))
         return x
+
 
 class DownSamples(nn.Module):
     def __init__(self, in_channels, out_channels):
@@ -342,6 +358,7 @@ class DownSamples(nn.Module):
         x = x.flatten(2).transpose(1, 2)
         x = self.norm(x)
         return x, H, W
+
 
 class Stem(nn.Module):
     def __init__(self, in_channels, stem_hidden_dim, out_channels):
@@ -389,29 +406,30 @@ class Stem(nn.Module):
         x = self.conv(x)
         x = self.proj(x)
         _, _, H, W = x.shape
-        x = x.flatten(2).transpose(1, 2)
+        x = x.flatten(2).transpose(1, 2)  # [B, H*W, C]
         x = self.norm(x)
         return x, H, W
 
+
 @BACKBONES.register_module()
 class WaveViT(nn.Module):
-    def __init__(self, 
-        stem_hidden_dim = 32, 
-        embed_dims = [64, 128, 320, 448],
-        num_heads = [2, 4, 10, 14], 
-        mlp_ratios = [8, 8, 4, 4], 
-        drop_path_rate = 0., 
-        depths = [3, 4, 6, 3],
-        sr_ratios = [4, 2, 1, 1], 
-        norm_layer = partial(nn.LayerNorm, eps=1e-6), 
-        use_checkpoint=False):
+    def __init__(self,
+                 stem_hidden_dim=32,
+                 embed_dims=[64, 128, 320, 448],
+                 num_heads=[2, 4, 10, 14],
+                 mlp_ratios=[8, 8, 4, 4],  # The MLP ratio controls the size of the MLP’s hidden layer relative to the input embedding dimension.
+                 drop_path_rate=0.,
+                 depths=[3, 4, 6, 3],
+                 sr_ratios=[4, 2, 1, 1],
+                 norm_layer=partial(nn.LayerNorm, eps=1e-6),
+                 use_checkpoint=False):
 
         super().__init__()
         in_chans = 3
         self.num_stages = 4
         self.depths = depths
-        
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]  # stochastic depth decay rule
+
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]  # stochastic depth decay rule for each transformer block
         cur = 0
 
         for i in range(self.num_stages):
@@ -421,22 +439,22 @@ class WaveViT(nn.Module):
                 patch_embed = DownSamples(embed_dims[i - 1], embed_dims[i])
 
             block = nn.ModuleList([Block(
-                dim=embed_dims[i], 
-                num_heads=num_heads[i], 
+                dim=embed_dims[i],
+                num_heads=num_heads[i],
                 mlp_ratio=mlp_ratios[i],
-                drop_path=dpr[cur + j], 
+                drop_path=dpr[cur + j],
                 norm_layer=norm_layer,
-                sr_ratio=sr_ratios[i], 
+                sr_ratio=sr_ratios[i],  # spatial reduction ratio before the self-attention computation
                 block_type='wave' if i < 2 else 'std_att')
-            for j in range(depths[i])])
-            
+                for j in range(depths[i])])
+
             norm = norm_layer(embed_dims[i])
             cur += depths[i]
 
             setattr(self, f"patch_embed{i + 1}", patch_embed)
             setattr(self, f"block{i + 1}", block)
             setattr(self, f"norm{i + 1}", norm)
-           
+
     def init_weights(self, pretrained=None):
         def _init_weights(m):
             if isinstance(m, nn.Linear):
@@ -478,3 +496,14 @@ class WaveViT(nn.Module):
             outs.append(x)
 
         return tuple(outs)
+
+
+if __name__ == '__main__':
+    device = 'cuda'
+
+    model = WaveViT()
+    x = torch.ones(4, 3, 256, 256).to(device)
+
+    output = model(x)
+
+    print(output.shape)
